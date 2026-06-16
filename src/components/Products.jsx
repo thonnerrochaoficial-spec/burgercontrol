@@ -287,8 +287,13 @@ export default function Products({ products, onProductSave, onProductDelete, ing
           {/* Preço */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">Preço de Venda (R$) *</label>
-            <input type="number" value={form.salePrice} onChange={(e) => setForm((f) => ({ ...f, salePrice: e.target.value }))}
-              placeholder="0,00" min="0" step="0.01"
+            <input type="text" inputMode="numeric" value={form.salePrice}
+              onChange={(e) => {
+                const v = e.target.value.replace(/[^0-9.]/g, '').replace(/^(\d*\.?\d*).*/, '$1')
+                setForm((f) => ({ ...f, salePrice: v }))
+              }}
+              onBlur={() => setForm((f) => ({ ...f, salePrice: f.salePrice === '' ? '0' : f.salePrice }))}
+              placeholder="0,00"
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 transition-colors" />
           </div>
 
@@ -326,8 +331,13 @@ export default function Products({ products, onProductSave, onProductDelete, ing
                       {item.ingredientId && info && (
                         <div className="flex items-center gap-3 px-2.5 pb-2.5">
                           <div className="flex items-center bg-gray-800 border border-gray-700 rounded-lg overflow-hidden focus-within:border-orange-500 transition-colors">
-                            <input type="number" value={item.quantity} onChange={(e) => updateRecipeItem(index, 'quantity', e.target.value)}
-                              placeholder="0" min="0" step="0.1"
+                            <input type="text" inputMode="numeric" value={item.quantity}
+                              onChange={(e) => {
+                                const v = e.target.value.replace(/[^0-9.]/g, '').replace(/^(\d*\.?\d*).*/, '$1')
+                                updateRecipeItem(index, 'quantity', v)
+                              }}
+                              onBlur={() => updateRecipeItem(index, 'quantity', item.quantity === '' ? '0' : item.quantity)}
+                              placeholder="0"
                               className="w-20 px-3 py-1.5 text-white text-sm bg-transparent focus:outline-none placeholder-gray-600" />
                             <span className="text-orange-400 text-xs font-semibold pr-3 shrink-0 border-l border-gray-700 pl-2">{info.inputUnit}</span>
                           </div>

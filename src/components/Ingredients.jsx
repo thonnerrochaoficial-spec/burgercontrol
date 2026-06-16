@@ -184,12 +184,15 @@ export default function Ingredients({ ingredients, onSave, onDelete }) {
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">Preço Unitário (R$) *</label>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 value={form.price}
-                onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+                onChange={(e) => {
+                  const v = e.target.value.replace(/[^0-9.]/g, '').replace(/^(\d*\.?\d*).*/, '$1')
+                  setForm((f) => ({ ...f, price: v }))
+                }}
+                onBlur={() => setForm((f) => ({ ...f, price: f.price === '' ? '0' : f.price }))}
                 placeholder="0,00"
-                min="0"
-                step="0.01"
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 transition-colors"
               />
             </div>
@@ -208,12 +211,15 @@ export default function Ingredients({ ingredients, onSave, onDelete }) {
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">Quantidade em Estoque</label>
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
               value={form.quantity}
-              onChange={(e) => setForm((f) => ({ ...f, quantity: e.target.value }))}
+              onChange={(e) => {
+                const v = e.target.value.replace(/[^0-9.]/g, '').replace(/^(\d*\.?\d*).*/, '$1')
+                setForm((f) => ({ ...f, quantity: v }))
+              }}
+              onBlur={() => setForm((f) => ({ ...f, quantity: f.quantity === '' ? '0' : f.quantity }))}
               placeholder="0"
-              min="0"
-              step="0.1"
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 transition-colors"
             />
           </div>

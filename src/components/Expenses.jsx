@@ -118,16 +118,19 @@ export default function Expenses({ expenses, onSave, onDelete, totalExpenses, mo
           <p className="text-gray-400 text-xs mb-2">Vendas Mensais Estimadas</p>
           <div className="flex items-center gap-2">
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
               value={rawUnits}
-              onChange={(e) => setRawUnits(e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value.replace(/[^0-9.]/g, '').replace(/^(\d*\.?\d*).*/, '$1')
+                setRawUnits(v)
+              }}
               onBlur={() => {
                 const n = Number(rawUnits)
-                const valid = n >= 1 ? n : (monthlyUnits >= 1 ? monthlyUnits : 1)
+                const valid = rawUnits === '' || isNaN(n) ? 0 : n
                 setMonthlyUnits(valid)
                 setRawUnits(String(valid))
               }}
-              min="1"
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-white text-base font-bold focus:outline-none focus:border-orange-500 transition-colors"
             />
             <span className="text-gray-500 text-sm shrink-0">unid/mês</span>
@@ -207,12 +210,15 @@ export default function Expenses({ expenses, onSave, onDelete, totalExpenses, mo
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">Valor Mensal (R$) *</label>
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
               value={form.monthlyAmount}
-              onChange={(e) => setForm((f) => ({ ...f, monthlyAmount: e.target.value }))}
+              onChange={(e) => {
+                const v = e.target.value.replace(/[^0-9.]/g, '').replace(/^(\d*\.?\d*).*/, '$1')
+                setForm((f) => ({ ...f, monthlyAmount: v }))
+              }}
+              onBlur={() => setForm((f) => ({ ...f, monthlyAmount: f.monthlyAmount === '' ? '0' : f.monthlyAmount }))}
               placeholder="0,00"
-              min="0"
-              step="0.01"
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 transition-colors"
             />
           </div>
