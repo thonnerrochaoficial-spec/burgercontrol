@@ -8,6 +8,7 @@ const EMPTY_FORM = { name: '', monthlyAmount: '' }
 const PREFIX = 'despesa'
 
 export default function Expenses({ expenses, onSave, onDelete, totalExpenses, monthlyUnits, setMonthlyUnits, expensePerUnit }) {
+  const [rawUnits, setRawUnits] = useState(String(monthlyUnits))
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(EMPTY_FORM)
@@ -15,6 +16,8 @@ export default function Expenses({ expenses, onSave, onDelete, totalExpenses, mo
   const [hasDraft, setHasDraft] = useState(false)
   const [deleteId, setDeleteId] = useState(null)
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => { setRawUnits(String(monthlyUnits)) }, [monthlyUnits])
 
   // Auto-save draft while modal is open
   useEffect(() => {
@@ -116,8 +119,14 @@ export default function Expenses({ expenses, onSave, onDelete, totalExpenses, mo
           <div className="flex items-center gap-2">
             <input
               type="number"
-              value={monthlyUnits}
-              onChange={(e) => setMonthlyUnits(Math.max(1, Number(e.target.value)))}
+              value={rawUnits}
+              onChange={(e) => setRawUnits(e.target.value)}
+              onBlur={() => {
+                const n = Number(rawUnits)
+                const valid = n >= 1 ? n : (monthlyUnits >= 1 ? monthlyUnits : 1)
+                setMonthlyUnits(valid)
+                setRawUnits(String(valid))
+              }}
               min="1"
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-white text-base font-bold focus:outline-none focus:border-orange-500 transition-colors"
             />
