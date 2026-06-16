@@ -148,9 +148,14 @@ function SummaryModal({ isOpen, onClose, onConfirm, directSummary, ifoodSummary,
   if (!isOpen) return null
   const hasD = directSummary.totalItems > 0
   const hasI = ifoodSummary.totalItems > 0
-  const combinedRevenue = directSummary.revenue + ifoodSummary.revenue
-  const combinedProfit  = directSummary.realProfit + ifoodSummary.realProfit
-  const combinedItems   = directSummary.totalItems + ifoodSummary.totalItems
+  const combinedItems        = directSummary.totalItems + ifoodSummary.totalItems
+  // Faturamento líquido: direto = revenue bruto; iFood = após taxas
+  const combinedNetRevenue   = directSummary.revenue + ifoodSummary.netRevenue
+  const combinedCost         = directSummary.totalCost + ifoodSummary.totalCost
+  const combinedGrossProfit  = directSummary.grossProfit + ifoodSummary.grossProfit
+  const dailyExp             = directSummary.dailyExp  // descontado UMA vez no geral
+  const combinedRealProfit   = combinedGrossProfit - dailyExp
+  const combinedMargin       = combinedNetRevenue > 0 ? (combinedRealProfit / combinedNetRevenue) * 100 : 0
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/70">
@@ -173,13 +178,10 @@ function SummaryModal({ isOpen, onClose, onConfirm, directSummary, ifoodSummary,
               </h3>
               <div className="bg-gray-800/50 rounded-xl p-4 space-y-2 text-sm">
                 <SummaryRow label="Total de itens" value={`${directSummary.totalItems} itens`} />
-                <SummaryRow label="Faturamento bruto" value={formatCurrency(directSummary.revenue)} />
+                <SummaryRow label="Faturamento" value={formatCurrency(directSummary.revenue)} />
                 <SummaryRow label="Custo dos ingredientes" value={`− ${formatCurrency(directSummary.totalCost)}`} dim />
-                <SummaryRow label="Lucro bruto" value={formatCurrency(directSummary.grossProfit)} positive={directSummary.grossProfit >= 0} />
-                <SummaryRow label="Despesas fixas do dia" value={`− ${formatCurrency(directSummary.dailyExp)}`} dim />
                 <div className="border-t border-gray-700 pt-2">
-                  <SummaryRow label="Lucro real do dia" value={formatCurrency(directSummary.realProfit)} positive={directSummary.realProfit >= 0} bold />
-                  <SummaryRow label="Margem real" value={`${directSummary.margin.toFixed(1)}%`} />
+                  <SummaryRow label="Lucro bruto do canal" value={formatCurrency(directSummary.grossProfit)} positive={directSummary.grossProfit >= 0} bold />
                 </div>
                 {directSummary.topProduct && (
                   <p className="text-gray-500 text-xs pt-1">⭐ Mais vendido: <span className="text-white">{directSummary.topProduct.item.emoji || ''} {directSummary.topProduct.item.name}</span> ({directSummary.topProduct.q}×)</p>
@@ -204,10 +206,8 @@ function SummaryModal({ isOpen, onClose, onConfirm, directSummary, ifoodSummary,
                 </div>
                 <SummaryRow label="Valor líquido recebido" value={formatCurrency(ifoodSummary.netRevenue)} />
                 <SummaryRow label="Custo dos ingredientes" value={`− ${formatCurrency(ifoodSummary.totalCost)}`} dim />
-                <SummaryRow label="Despesas fixas do dia" value={`− ${formatCurrency(ifoodSummary.dailyExp)}`} dim />
                 <div className="border-t border-gray-700 pt-2">
-                  <SummaryRow label="Lucro real após taxas" value={formatCurrency(ifoodSummary.realProfit)} positive={ifoodSummary.realProfit >= 0} bold />
-                  <SummaryRow label="Margem real no iFood" value={`${ifoodSummary.margin.toFixed(1)}%`} />
+                  <SummaryRow label="Lucro bruto do canal" value={formatCurrency(ifoodSummary.grossProfit)} positive={ifoodSummary.grossProfit >= 0} bold />
                 </div>
                 {ifoodSummary.topProduct && (
                   <p className="text-gray-500 text-xs pt-1">⭐ Mais vendido: <span className="text-white">{ifoodSummary.topProduct.item.emoji || ''} {ifoodSummary.topProduct.item.name}</span> ({ifoodSummary.topProduct.q}×)</p>
@@ -223,10 +223,18 @@ function SummaryModal({ isOpen, onClose, onConfirm, directSummary, ifoodSummary,
               </h3>
               <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-4 space-y-2 text-sm">
                 <SummaryRow label="Total de itens" value={`${combinedItems} itens`} />
-                <SummaryRow label="Faturamento total" value={formatCurrency(combinedRevenue)} />
-                <SummaryRow label="Lucro total do dia" value={formatCurrency(combinedProfit)} positive={combinedProfit >= 0} bold />
-                {hasD && <p className="text-gray-400 text-xs pt-1">🟢 Direto: {formatCurrency(directSummary.revenue)}{combinedRevenue > 0 ? ` (${((directSummary.revenue / combinedRevenue) * 100).toFixed(0)}%)` : ''}</p>}
-                {hasI && <p className="text-gray-400 text-xs">🟠 iFood: {formatCurrency(ifoodSummary.revenue)}{combinedRevenue > 0 ? ` (${((ifoodSummary.revenue / combinedRevenue) * 100).toFixed(0)}%)` : ''}</p>}
+                <SummaryRow label="Faturamento líquido" value={formatCurrency(combinedNetRevenue)} />
+                <SummaryRow label="Custo dos ingredientes" value={`− ${formatCurrency(combinedCost)}`} dim />
+                <SummaryRow label="Lucro bruto total" value={formatCurrency(combinedGrossProfit)} positive={combinedGrossProfit >= 0} />
+                <SummaryRow label="Despesas fixas do dia" value={`− ${formatCurrency(dailyExp)}`} dim />
+                <div className="border-t border-orange-500/20 pt-2">
+                  <SummaryRow label="Lucro real do dia" value={formatCurrency(combinedRealProfit)} positive={combinedRealProfit >= 0} bold />
+                  <SummaryRow label="Margem real" value={`${combinedMargin.toFixed(1)}%`} />
+                </div>
+                <div className="pt-1 space-y-0.5">
+                  {hasD && <p className="text-gray-400 text-xs">🟢 Direto: {formatCurrency(directSummary.revenue)}{combinedNetRevenue > 0 ? ` (${((directSummary.revenue / combinedNetRevenue) * 100).toFixed(0)}%)` : ''}</p>}
+                  {hasI && <p className="text-gray-400 text-xs">🟠 iFood líquido: {formatCurrency(ifoodSummary.netRevenue)}{combinedNetRevenue > 0 ? ` (${((ifoodSummary.netRevenue / combinedNetRevenue) * 100).toFixed(0)}%)` : ''}</p>}
+                </div>
               </div>
             </section>
           )}
@@ -643,9 +651,9 @@ export default function Sales({ enrichedProducts, enrichedCombos = [], totalExpe
             <p className="text-orange-400 font-bold text-lg">{formatCurrency(currentSummary.revenue)}</p>
           </div>
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 text-center">
-            <p className="text-gray-500 text-xs mb-1">{channel === 'ifood' ? 'Líquido iFood' : 'Lucro Real'}</p>
-            <p className={`font-bold text-lg ${currentSummary.realProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {formatCurrency(channel === 'ifood' ? currentSummary.netRevenue : currentSummary.realProfit)}
+            <p className="text-gray-500 text-xs mb-1">Lucro Bruto</p>
+            <p className={`font-bold text-lg ${currentSummary.grossProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {formatCurrency(currentSummary.grossProfit)}
             </p>
           </div>
         </div>
@@ -668,8 +676,8 @@ export default function Sales({ enrichedProducts, enrichedCombos = [], totalExpe
             {history.slice(0, 30).map(day => {
               const dSum = day.channels.direto ? calcSummaryFromItems(day.channels.direto.vendas_itens || [], totalExpenses, 0) : null
               const iSum = day.channels.ifood  ? calcSummaryFromItems(day.channels.ifood.vendas_itens  || [], totalExpenses, ifoodComissao) : null
-              const totRevenue = (dSum?.revenue || 0) + (iSum?.revenue || 0)
-              const totProfit  = (dSum?.realProfit || 0) + (iSum?.realProfit || 0)
+              const totRevenue = (dSum?.revenue || 0) + (iSum?.netRevenue || 0)
+              const totProfit  = (dSum?.grossProfit || 0) + (iSum?.grossProfit || 0) - (totalExpenses / 30)
               const totItems   = (dSum?.totalItems || 0) + (iSum?.totalItems || 0)
               const isExpanded = expandedDay === day.date
               const canEdit    = isWithin7Days(day.date)
