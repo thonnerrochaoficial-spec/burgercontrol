@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import {
   ShoppingCart, Plus, Minus, Calendar, CheckCircle,
-  ChevronDown, Lock, X, TrendingUp, History, Package
+  ChevronDown, Lock, X, TrendingUp, History, Package, Pencil
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -32,6 +32,11 @@ const fmtDateLong = (iso) => {
   const [, m, d] = iso.split('-')
   const date = new Date(`${iso}T12:00:00`)
   return `${weekdays[date.getDay()]}, ${Number(d)} de ${months[Number(m) - 1]}`
+}
+
+const isWithin7Days = (iso) => {
+  const diff = Date.now() - new Date(`${iso}T12:00:00`).getTime()
+  return diff >= 0 && diff <= 7 * 86400000
 }
 
 // ── Draft helpers ──────────────────────────────────────────────────────────
@@ -139,7 +144,7 @@ function SummaryRow({ label, value, dim, positive, bold }) {
   )
 }
 
-function SummaryModal({ isOpen, onClose, onConfirm, directSummary, ifoodSummary, date, ifoodPlan, ifoodComissao, saving, saveError }) {
+function SummaryModal({ isOpen, onClose, onConfirm, directSummary, ifoodSummary, date, ifoodPlan, ifoodComissao, saving, saveError, isEditing }) {
   if (!isOpen) return null
   const hasD = directSummary.totalItems > 0
   const hasI = ifoodSummary.totalItems > 0
@@ -152,7 +157,7 @@ function SummaryModal({ isOpen, onClose, onConfirm, directSummary, ifoodSummary,
       <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-5 border-b border-gray-800 sticky top-0 bg-gray-900 rounded-t-2xl">
           <div>
-            <h2 className="text-white font-bold text-lg">Resumo do Dia</h2>
+            <h2 className="text-white font-bold text-lg">{isEditing ? 'Salvar Alterações' : 'Resumo do Dia'}</h2>
             <p className="text-gray-400 text-sm">{fmtDateLong(date)}</p>
           </div>
           <button onClick={onClose} className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center text-gray-400 hover:text-white cursor-pointer transition-colors">
@@ -248,7 +253,9 @@ function SummaryModal({ isOpen, onClose, onConfirm, directSummary, ifoodSummary,
             >
               {saving
                 ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Salvando...</>
-                : <><CheckCircle size={16} />Confirmar e Fechar</>}
+                : isEditing
+                  ? <><CheckCircle size={16} />Salvar Alterações</>
+                  : <><CheckCircle size={16} />Confirmar e Fechar</>}
             </button>
           </div>
         </div>
@@ -274,6 +281,7 @@ export default function Sales({ enrichedProducts, enrichedCombos = [], totalExpe
   const [saving, setSaving]             = useState(false)
   const [saveError, setSaveError]       = useState(null)
   const [expandedDay, setExpandedDay]   = useState(null)
+  const [editingDay, setEditingDay]     = useState(null)
 
   // Unified item list (products first, then combos)
   const allItems = [
@@ -340,7 +348,8 @@ export default function Sales({ enrichedProducts, enrichedCombos = [], totalExpe
   // ── Qty handlers ──
   const activeQty    = channel === 'direto' ? directQty : ifoodQty
   const setActiveQty = channel === 'direto' ? setDirectQty : setIfoodQty
-  const isClosed     = channel === 'direto' ? directClosed : ifoodClosed
+  // When in edit mode, override closed state so cards become editable
+  const isClosed     = editingDay ? false : (channel === 'direto' ? directClosed : ifoodClosed)
 
   const commitQty = (id, raw) => {
     const n = Math.max(0, Number(raw) || 0)
@@ -357,6 +366,28 @@ export default function Sales({ enrichedProducts, enrichedCombos = [], totalExpe
       setActiveQty(prev => ({ ...prev, [id]: curr - 1 }))
       setRawVals(rv => { const r = { ...rv }; delete r[id]; return r })
     }
+  }
+
+  // ── Edit mode ──
+  const startEditing = (histDay) => {
+    setEditingDay(histDay)
+    setChannel('direto')
+    setRawVals({})
+    setSaveError(null)
+    if (date !== histDay) {
+      setDate(histDay) // useEffect will call loadDayData
+    }
+    // If date already equals histDay, data is already loaded and directClosed=true;
+    // editingDay override makes isClosed=false so cards become editable
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const cancelEditing = () => {
+    setEditingDay(null)
+    setRawVals({})
+    setSaveError(null)
+    // Reload to restore original quantities (user may have changed them)
+    loadDayData(date)
   }
 
   // ── Summaries ──
@@ -439,6 +470,7 @@ export default function Sales({ enrichedProducts, enrichedCombos = [], totalExpe
       // Passo 4: tudo salvo — atualiza estado e fecha modal
       setDirectClosed(closedDireto)
       setIfoodClosed(closedIfood)
+      setEditingDay(null)
       setShowSummary(false)
       loadHistory()
     } catch (err) {
@@ -473,7 +505,7 @@ export default function Sales({ enrichedProducts, enrichedCombos = [], totalExpe
     )
   }
 
-  const bothClosed = directClosed && ifoodClosed
+  const bothClosed = !editingDay && directClosed && ifoodClosed
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto">
@@ -483,12 +515,22 @@ export default function Sales({ enrichedProducts, enrichedCombos = [], totalExpe
           <h1 className="text-2xl font-bold text-white">Vendas</h1>
           <p className="text-gray-400 text-sm mt-1">Registro diário de vendas</p>
         </div>
-        <button
-          onClick={() => setShowSummary(true)} disabled={bothClosed}
-          className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-800 disabled:text-gray-600 text-white px-4 py-2.5 rounded-xl font-medium text-sm transition-colors cursor-pointer disabled:cursor-not-allowed shadow-lg shadow-orange-500/20 disabled:shadow-none"
-        >
-          <CheckCircle size={16} />Fechar Dia
-        </button>
+        <div className="flex items-center gap-2">
+          {editingDay && (
+            <button
+              onClick={cancelEditing}
+              className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-2.5 rounded-xl font-medium text-sm transition-colors cursor-pointer"
+            >
+              <X size={14} />Cancelar
+            </button>
+          )}
+          <button
+            onClick={() => setShowSummary(true)} disabled={bothClosed}
+            className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-800 disabled:text-gray-600 text-white px-4 py-2.5 rounded-xl font-medium text-sm transition-colors cursor-pointer disabled:cursor-not-allowed shadow-lg shadow-orange-500/20 disabled:shadow-none"
+          >
+            <CheckCircle size={16} />{editingDay ? 'Salvar Alterações' : 'Fechar Dia'}
+          </button>
+        </div>
       </div>
 
       {/* Date picker */}
@@ -497,8 +539,9 @@ export default function Sales({ enrichedProducts, enrichedCombos = [], totalExpe
           <Calendar size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
           <input
             type="date" value={date} max={todayStr()}
-            onChange={(e) => e.target.value && setDate(e.target.value)}
-            className="w-full bg-gray-900 border border-gray-700 rounded-xl pl-9 pr-3 py-2.5 text-white text-sm focus:outline-none focus:border-orange-500 transition-colors cursor-pointer"
+            onChange={(e) => e.target.value && !editingDay && setDate(e.target.value)}
+            disabled={!!editingDay}
+            className="w-full bg-gray-900 border border-gray-700 rounded-xl pl-9 pr-3 py-2.5 text-white text-sm focus:outline-none focus:border-orange-500 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           />
         </div>
         <span className="text-gray-400 text-sm hidden sm:block">{fmtDateLong(date)}</span>
@@ -522,8 +565,18 @@ export default function Sales({ enrichedProducts, enrichedCombos = [], totalExpe
         })}
       </div>
 
+      {/* Editing banner */}
+      {editingDay && (
+        <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-2.5 mb-5">
+          <Pencil size={14} className="text-amber-400 shrink-0" />
+          <p className="text-amber-300 text-sm">
+            Editando dia <span className="font-semibold">{fmtDate(editingDay)}</span> — altere as quantidades e clique em &quot;Salvar Alterações&quot;.
+          </p>
+        </div>
+      )}
+
       {/* iFood — Configurações */}
-      {channel === 'ifood' && !ifoodClosed && (
+      {channel === 'ifood' && !isClosed && (
         <div className="mb-5 p-4 bg-gray-900 border border-gray-800 rounded-xl space-y-3">
           <p className="text-gray-400 text-xs font-semibold uppercase tracking-wider">⚙️ Configurações iFood</p>
           <div className="flex items-center gap-3">
@@ -557,8 +610,8 @@ export default function Sales({ enrichedProducts, enrichedCombos = [], totalExpe
         </div>
       )}
 
-      {/* Closed indicator */}
-      {isClosed && (
+      {/* Closed indicator — hidden in edit mode */}
+      {isClosed && !editingDay && (
         <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-2.5 mb-5">
           <Lock size={14} className="text-green-400 shrink-0" />
           <p className="text-green-300 text-sm">Dia fechado — este registro está finalizado.</p>
@@ -619,23 +672,44 @@ export default function Sales({ enrichedProducts, enrichedCombos = [], totalExpe
               const totProfit  = (dSum?.realProfit || 0) + (iSum?.realProfit || 0)
               const totItems   = (dSum?.totalItems || 0) + (iSum?.totalItems || 0)
               const isExpanded = expandedDay === day.date
+              const canEdit    = isWithin7Days(day.date)
+              const isBeingEdited = editingDay === day.date
               return (
-                <div key={day.date} className="bg-gray-900 border border-gray-800 hover:border-gray-700 rounded-xl overflow-hidden transition-colors">
-                  <button
-                    onClick={() => setExpandedDay(isExpanded ? null : day.date)}
-                    className="w-full flex items-center justify-between p-4 cursor-pointer text-left"
-                  >
-                    <div>
-                      <p className="text-white font-medium text-sm">{fmtDate(day.date)}</p>
-                      <p className="text-gray-500 text-xs mt-0.5">
-                        {totItems} itens · {day.channels.direto ? '🟢 Direto' : ''}{day.channels.direto && day.channels.ifood ? ' + ' : ''}{day.channels.ifood ? '🟠 iFood' : ''}
-                      </p>
+                <div key={day.date} className={`bg-gray-900 border rounded-xl overflow-hidden transition-colors ${isBeingEdited ? 'border-amber-500/50' : 'border-gray-800 hover:border-gray-700'}`}>
+                  <div className="flex items-center">
+                    <button
+                      onClick={() => setExpandedDay(isExpanded ? null : day.date)}
+                      className="flex-1 flex items-center justify-between px-4 py-3 cursor-pointer text-left"
+                    >
+                      <div>
+                        <p className="text-white font-medium text-sm flex items-center gap-2">
+                          {fmtDate(day.date)}
+                          {isBeingEdited && <span className="text-amber-400 text-[10px] font-bold uppercase tracking-wide">Editando</span>}
+                        </p>
+                        <p className="text-gray-500 text-xs mt-0.5">
+                          {totItems} itens · {day.channels.direto ? '🟢 Direto' : ''}{day.channels.direto && day.channels.ifood ? ' + ' : ''}{day.channels.ifood ? '🟠 iFood' : ''}
+                        </p>
+                      </div>
+                      <div className="text-right mr-2">
+                        <p className="text-orange-400 font-bold text-sm">{formatCurrency(totRevenue)}</p>
+                        <p className={`text-xs font-medium ${totProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>Lucro: {formatCurrency(totProfit)}</p>
+                      </div>
+                    </button>
+                    <div className="pr-3 shrink-0">
+                      <button
+                        onClick={() => canEdit && startEditing(day.date)}
+                        disabled={!canEdit}
+                        title={canEdit ? 'Editar este dia' : 'Edição disponível apenas nos últimos 7 dias'}
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
+                          canEdit
+                            ? 'text-gray-500 hover:text-amber-400 hover:bg-amber-400/10 cursor-pointer'
+                            : 'text-gray-700 cursor-not-allowed'
+                        }`}
+                      >
+                        <Pencil size={14} />
+                      </button>
                     </div>
-                    <div className="text-right">
-                      <p className="text-orange-400 font-bold text-sm">{formatCurrency(totRevenue)}</p>
-                      <p className={`text-xs font-medium ${totProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>Lucro: {formatCurrency(totProfit)}</p>
-                    </div>
-                  </button>
+                  </div>
                   {isExpanded && (
                     <div className="px-4 pb-4 border-t border-gray-800 grid grid-cols-2 gap-4 text-xs pt-4">
                       {dSum && (
@@ -681,6 +755,7 @@ export default function Sales({ enrichedProducts, enrichedCombos = [], totalExpe
         ifoodComissao={ifoodComissao}
         saving={saving}
         saveError={saveError}
+        isEditing={!!editingDay}
       />
     </div>
   )
