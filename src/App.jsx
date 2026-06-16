@@ -10,6 +10,7 @@ import Products from './components/Products'
 import Ingredients from './components/Ingredients'
 import Expenses from './components/Expenses'
 import Analytics from './components/Analytics'
+import InstallBanner from './components/InstallBanner'
 import { getIngredientRecipeInfo } from './utils'
 
 // ── Field mapping: DB (PT) → app (EN) ──
@@ -454,6 +455,7 @@ function AppInner() {
         {renderPage()}
       </main>
       <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
+      <InstallBanner />
     </div>
   )
 }
