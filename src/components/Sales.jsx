@@ -139,7 +139,7 @@ function SummaryRow({ label, value, dim, positive, bold }) {
   )
 }
 
-function SummaryModal({ isOpen, onClose, onConfirm, directSummary, ifoodSummary, date, ifoodPlan, ifoodComissao, saving }) {
+function SummaryModal({ isOpen, onClose, onConfirm, directSummary, ifoodSummary, date, ifoodPlan, ifoodComissao, saving, saveError }) {
   if (!isOpen) return null
   const hasD = directSummary.totalItems > 0
   const hasI = ifoodSummary.totalItems > 0
@@ -231,18 +231,26 @@ function SummaryModal({ isOpen, onClose, onConfirm, directSummary, ifoodSummary,
           )}
         </div>
 
-        <div className="p-5 border-t border-gray-800 flex gap-3">
-          <button onClick={onClose} className="flex-1 bg-gray-800 hover:bg-gray-700 text-gray-300 py-3 rounded-xl font-medium transition-colors cursor-pointer">
-            Cancelar
-          </button>
-          <button
-            onClick={onConfirm} disabled={saving || (!hasD && !hasI)}
-            className="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-xl font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
-          >
-            {saving
-              ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Salvando...</>
-              : <><CheckCircle size={16} />Confirmar e Fechar</>}
-          </button>
+        <div className="p-5 border-t border-gray-800 space-y-3">
+          {saveError && (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 flex items-start gap-2">
+              <X size={14} className="text-red-400 shrink-0 mt-0.5" />
+              <p className="text-red-300 text-sm">{saveError}</p>
+            </div>
+          )}
+          <div className="flex gap-3">
+            <button onClick={onClose} className="flex-1 bg-gray-800 hover:bg-gray-700 text-gray-300 py-3 rounded-xl font-medium transition-colors cursor-pointer">
+              Cancelar
+            </button>
+            <button
+              onClick={onConfirm} disabled={saving || (!hasD && !hasI)}
+              className="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-xl font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
+            >
+              {saving
+                ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Salvando...</>
+                : <><CheckCircle size={16} />Confirmar e Fechar</>}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -264,6 +272,7 @@ export default function Sales({ enrichedProducts, enrichedCombos = [], totalExpe
   const [history, setHistory]           = useState([])
   const [showSummary, setShowSummary]   = useState(false)
   const [saving, setSaving]             = useState(false)
+  const [saveError, setSaveError]       = useState(null)
   const [expandedDay, setExpandedDay]   = useState(null)
 
   // Unified item list (products first, then combos)
@@ -359,6 +368,11 @@ export default function Sales({ enrichedProducts, enrichedCombos = [], totalExpe
   // ── Close day ──
   const confirmClose = async () => {
     setSaving(true)
+    setSaveError(null)
+    let closedDireto = directClosed
+    let closedIfood  = ifoodClosed
+    let anyChannel   = false
+
     try {
       for (const ch of ['direto', 'ifood']) {
         const chQty = ch === 'direto' ? directQty : ifoodQty
@@ -372,31 +386,64 @@ export default function Sales({ enrichedProducts, enrichedCombos = [], totalExpe
             preco_venda: item.salePrice,
             custo:       item.ingredientCost,
           }))
-        if (items.length === 0) continue
 
-        const { data: existing } = await supabase
+        console.log(`[Vendas] canal="${ch}" itens=${items.length}`, items)
+        if (items.length === 0) continue
+        anyChannel = true
+
+        // Passo 1: verificar se já existe registro para esse dia/canal
+        const { data: existing, error: errSelect } = await supabase
           .from('vendas_dia').select('id')
           .eq('user_id', user.id).eq('data', date).eq('canal', ch).maybeSingle()
+        if (errSelect) throw new Error(`Erro ao consultar vendas_dia (${ch}): ${errSelect.message}`)
 
         let dayId
         if (existing) {
+          // Passo 2a: atualiza registro existente
           dayId = existing.id
-          await supabase.from('vendas_dia').update({ fechado: true }).eq('id', dayId)
-          await supabase.from('vendas_itens').delete().eq('venda_dia_id', dayId)
+          console.log(`[Vendas] atualizando venda_dia id=${dayId}`)
+          const { error: errUpdate } = await supabase.from('vendas_dia').update({ fechado: true }).eq('id', dayId)
+          if (errUpdate) throw new Error(`Erro ao atualizar vendas_dia: ${errUpdate.message}`)
+          const { error: errDel } = await supabase.from('vendas_itens').delete().eq('venda_dia_id', dayId)
+          if (errDel) throw new Error(`Erro ao limpar itens anteriores: ${errDel.message}`)
         } else {
-          const { data, error } = await supabase.from('vendas_dia')
-            .insert({ user_id: user.id, data: date, canal: ch, fechado: true }).select().single()
-          if (error) throw error
-          dayId = data.id
+          // Passo 2b: cria novo registro
+          console.log(`[Vendas] criando venda_dia canal="${ch}" data="${date}"`)
+          const { data: newDay, error: errInsertDay } = await supabase
+            .from('vendas_dia')
+            .insert({ user_id: user.id, data: date, canal: ch, fechado: true })
+            .select('id')
+            .single()
+          if (errInsertDay) throw new Error(`Erro ao criar vendas_dia (${ch}): ${errInsertDay.message}`)
+          dayId = newDay.id
+          console.log(`[Vendas] venda_dia criada id=${dayId}`)
         }
-        await supabase.from('vendas_itens').insert(items.map(i => ({ ...i, venda_dia_id: dayId })))
+
+        // Passo 3: inserir itens
+        const rows = items.map(i => ({ ...i, venda_dia_id: dayId }))
+        console.log(`[Vendas] inserindo ${rows.length} itens em vendas_itens`, rows)
+        const { error: errItems } = await supabase.from('vendas_itens').insert(rows)
+        if (errItems) throw new Error(`Erro ao salvar itens (${ch}): ${errItems.message}`)
+
         clearDraft(date, ch)
+        if (ch === 'direto') closedDireto = true
+        if (ch === 'ifood')  closedIfood  = true
+        console.log(`[Vendas] canal="${ch}" fechado com sucesso`)
       }
-      setDirectClosed(true); setIfoodClosed(true)
+
+      if (!anyChannel) {
+        setSaveError('Adicione pelo menos um produto antes de fechar o dia.')
+        return
+      }
+
+      // Passo 4: tudo salvo — atualiza estado e fecha modal
+      setDirectClosed(closedDireto)
+      setIfoodClosed(closedIfood)
       setShowSummary(false)
       loadHistory()
     } catch (err) {
-      console.error('Erro ao fechar dia:', err)
+      console.error('[Vendas] Erro ao fechar dia:', err)
+      setSaveError(err.message || 'Erro inesperado ao salvar. Tente novamente.')
     } finally {
       setSaving(false)
     }
@@ -625,7 +672,7 @@ export default function Sales({ enrichedProducts, enrichedCombos = [], totalExpe
 
       <SummaryModal
         isOpen={showSummary}
-        onClose={() => setShowSummary(false)}
+        onClose={() => { setShowSummary(false); setSaveError(null) }}
         onConfirm={confirmClose}
         directSummary={directSummary}
         ifoodSummary={ifoodSummary}
@@ -633,6 +680,7 @@ export default function Sales({ enrichedProducts, enrichedCombos = [], totalExpe
         ifoodPlan={ifoodPlan}
         ifoodComissao={ifoodComissao}
         saving={saving}
+        saveError={saveError}
       />
     </div>
   )
