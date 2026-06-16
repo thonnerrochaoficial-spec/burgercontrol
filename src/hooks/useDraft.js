@@ -3,7 +3,7 @@ export function getDraftKey(prefix, editingId) {
 }
 
 export function saveDraftLS(key, data) {
-  try { localStorage.setItem(key, JSON.stringify(data)) } catch {}
+  try { localStorage.setItem(key, JSON.stringify(data)) } catch { /* quota exceeded */ }
 }
 
 export function loadDraftLS(key) {
@@ -11,5 +11,5 @@ export function loadDraftLS(key) {
 }
 
 export function clearDraftLS(key) {
-  try { localStorage.removeItem(key) } catch {}
+  try { localStorage.removeItem(key) } catch { /* ignore */ }
 }

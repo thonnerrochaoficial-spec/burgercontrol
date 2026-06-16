@@ -345,7 +345,7 @@ function ComboCardList({ combo }) {
   )
 }
 
-export default function Dashboard({ enrichedProducts, enrichedCombos = [], totalExpenses, ingredientsCount, userName, setActiveTab, expensePerUnit, expenses = [] }) {
+export default function Dashboard({ enrichedProducts, enrichedCombos = [], totalExpenses, userName, setActiveTab, expensePerUnit }) {
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('Todas')
   const [viewMode, setViewMode] = useState('grid')

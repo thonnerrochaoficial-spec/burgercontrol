@@ -1,6 +1,11 @@
 # Claude Code local files
 .claude/
 
+# Scripts temporários de desenvolvimento
+pw_verify.js
+pw_final.cjs
+README.md
+
 # Logs
 logs
 *.log

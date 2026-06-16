@@ -17,6 +17,7 @@ export default function Expenses({ expenses, onSave, onDelete, totalExpenses, mo
   const [deleteId, setDeleteId] = useState(null)
   const [saving, setSaving] = useState(false)
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setRawUnits(String(monthlyUnits)) }, [monthlyUnits])
 
   // Auto-save draft while modal is open

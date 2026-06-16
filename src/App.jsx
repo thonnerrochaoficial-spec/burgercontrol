@@ -135,8 +135,6 @@ function AppInner() {
     localStorage.setItem('bc_monthly_units', String(v))
   }
 
-  useEffect(() => { loadData() }, [user])
-
   const loadData = async () => {
     setDataLoading(true)
     const [ingsRes, prodsRes, expsRes, combosRes] = await Promise.all([
@@ -179,6 +177,9 @@ function AppInner() {
     }
     setDataLoading(false)
   }
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
+  useEffect(() => { loadData() }, [user])
 
   // ── Ingredient CRUD ──
   const handleIngredientSave = async (form, editingId) => {
@@ -266,7 +267,7 @@ function AppInner() {
   }
 
   // ── Combo CRUD ──
-  const handleComboSave = async (form, editingId, totalCost) => {
+  const handleComboSave = async (form, editingId) => {
     const uploadedUrl = await uploadPhotoIfNeeded(form.image, 'combos')
     const foto_url = uploadedUrl ?? ''
     const photoUploadFailed = form.image && !form.image.startsWith('http') && uploadedUrl === null
