@@ -8,10 +8,12 @@ import { useAuth } from '../contexts/AuthContext'
 import { formatCurrency } from '../utils'
 
 // ── Constants ──────────────────────────────────────────────────────────────
+const TAXA_TRANSACAO = 0.032   // taxa de pagamento online, sempre aplicada no iFood
+
 const IFOOD_PLANS = {
-  basico:            { label: 'Básico (12%)',                rate: 0.12 },
-  entrega:           { label: 'Entrega (27%)',               rate: 0.27 },
-  entregaBeneficios: { label: 'Entrega + Benefícios (30%)',  rate: 0.30 },
+  basico:            { label: 'Básico',               comissao: 0.12 },
+  entrega:           { label: 'Entrega',              comissao: 0.27 },
+  entregaBeneficios: { label: 'Entrega + Benefícios', comissao: 0.30 },
 }
 
 // ── Date helpers ───────────────────────────────────────────────────────────
@@ -39,35 +41,39 @@ const saveDraft = (date, ch, qty) => { try { localStorage.setItem(draftKey(date,
 const clearDraft = (date, ch) => { try { localStorage.removeItem(draftKey(date, ch)) } catch { /* ignore */ } }
 
 // ── Summary calculations ───────────────────────────────────────────────────
-// allItems: unified array of products + combos, each with { id, salePrice, ingredientCost, ... }
-function calcSummary(qty, allItems, totalExpenses, rate = 0) {
+// comissaoRate: plano iFood (0.12/0.27/0.30); se > 0, TAXA_TRANSACAO também é aplicada
+function calcSummary(qty, allItems, totalExpenses, comissaoRate = 0) {
   const rows = allItems
     .map(item => { const q = Math.max(0, Number(qty[item.id]) || 0); return { item, q } })
     .filter(({ q }) => q > 0)
-  const totalItems  = rows.reduce((s, { q }) => s + q, 0)
-  const revenue     = rows.reduce((s, { item, q }) => s + q * item.salePrice, 0)
-  const taxa        = revenue * rate
-  const netRevenue  = revenue - taxa
-  const totalCost   = rows.reduce((s, { item, q }) => s + q * item.ingredientCost, 0)
-  const dailyExp    = totalExpenses / 30
-  const grossProfit = netRevenue - totalCost
-  const realProfit  = grossProfit - dailyExp
-  const margin      = revenue > 0 ? (realProfit / revenue) * 100 : 0
-  const topProduct  = rows.length > 0 ? rows.reduce((best, r) => r.q > best.q ? r : best, rows[0]) : null
-  return { rows, totalItems, revenue, taxa, netRevenue, totalCost, dailyExp, grossProfit, realProfit, margin, topProduct }
+  const totalItems    = rows.reduce((s, { q }) => s + q, 0)
+  const revenue       = rows.reduce((s, { item, q }) => s + q * item.salePrice, 0)
+  const comissao      = revenue * comissaoRate
+  const taxaTransacao = comissaoRate > 0 ? revenue * TAXA_TRANSACAO : 0
+  const taxa          = comissao + taxaTransacao
+  const netRevenue    = revenue - taxa
+  const totalCost     = rows.reduce((s, { item, q }) => s + q * item.ingredientCost, 0)
+  const dailyExp      = totalExpenses / 30
+  const grossProfit   = netRevenue - totalCost
+  const realProfit    = grossProfit - dailyExp
+  const margin        = revenue > 0 ? (realProfit / revenue) * 100 : 0
+  const topProduct    = rows.length > 0 ? rows.reduce((best, r) => r.q > best.q ? r : best, rows[0]) : null
+  return { rows, totalItems, revenue, comissao, taxaTransacao, taxa, netRevenue, totalCost, dailyExp, grossProfit, realProfit, margin, topProduct }
 }
 
-function calcSummaryFromItems(dbItems, totalExpenses, rate = 0) {
-  const totalItems  = dbItems.reduce((s, i) => s + i.quantidade, 0)
-  const revenue     = dbItems.reduce((s, i) => s + i.quantidade * i.preco_venda, 0)
-  const taxa        = revenue * rate
-  const netRevenue  = revenue - taxa
-  const totalCost   = dbItems.reduce((s, i) => s + i.quantidade * i.custo, 0)
-  const dailyExp    = totalExpenses / 30
-  const grossProfit = netRevenue - totalCost
-  const realProfit  = grossProfit - dailyExp
-  const margin      = revenue > 0 ? (realProfit / revenue) * 100 : 0
-  return { totalItems, revenue, taxa, netRevenue, totalCost, dailyExp, grossProfit, realProfit, margin }
+function calcSummaryFromItems(dbItems, totalExpenses, comissaoRate = 0) {
+  const totalItems    = dbItems.reduce((s, i) => s + i.quantidade, 0)
+  const revenue       = dbItems.reduce((s, i) => s + i.quantidade * i.preco_venda, 0)
+  const comissao      = revenue * comissaoRate
+  const taxaTransacao = comissaoRate > 0 ? revenue * TAXA_TRANSACAO : 0
+  const taxa          = comissao + taxaTransacao
+  const netRevenue    = revenue - taxa
+  const totalCost     = dbItems.reduce((s, i) => s + i.quantidade * i.custo, 0)
+  const dailyExp      = totalExpenses / 30
+  const grossProfit   = netRevenue - totalCost
+  const realProfit    = grossProfit - dailyExp
+  const margin        = revenue > 0 ? (realProfit / revenue) * 100 : 0
+  return { totalItems, revenue, comissao, taxaTransacao, taxa, netRevenue, totalCost, dailyExp, grossProfit, realProfit, margin }
 }
 
 // ── SaleCard — horizontal row card ────────────────────────────────────────
@@ -133,7 +139,7 @@ function SummaryRow({ label, value, dim, positive, bold }) {
   )
 }
 
-function SummaryModal({ isOpen, onClose, onConfirm, directSummary, ifoodSummary, date, ifoodPlan, saving }) {
+function SummaryModal({ isOpen, onClose, onConfirm, directSummary, ifoodSummary, date, ifoodPlan, ifoodComissao, saving }) {
   if (!isOpen) return null
   const hasD = directSummary.totalItems > 0
   const hasI = ifoodSummary.totalItems > 0
@@ -180,12 +186,17 @@ function SummaryModal({ isOpen, onClose, onConfirm, directSummary, ifoodSummary,
           {hasI && (
             <section>
               <h3 className="text-white font-semibold text-sm mb-3 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-orange-400 shrink-0" />iFood — {IFOOD_PLANS[ifoodPlan].label}
+                <span className="w-2 h-2 rounded-full bg-orange-400 shrink-0" />
+                iFood — {IFOOD_PLANS[ifoodPlan].label} ({(ifoodComissao * 100).toFixed(0)}% + 3,2%)
               </h3>
               <div className="bg-gray-800/50 rounded-xl p-4 space-y-2 text-sm">
                 <SummaryRow label="Total de itens" value={`${ifoodSummary.totalItems} itens`} />
                 <SummaryRow label="Faturamento bruto" value={formatCurrency(ifoodSummary.revenue)} />
-                <SummaryRow label="Taxa iFood cobrada" value={`− ${formatCurrency(ifoodSummary.taxa)}`} dim />
+                <div className="border-l-2 border-red-500/30 pl-3 space-y-1.5 my-1">
+                  <SummaryRow label={`Comissão iFood (${(ifoodComissao * 100).toFixed(0)}%)`} value={`− ${formatCurrency(ifoodSummary.comissao)}`} dim />
+                  <SummaryRow label="Taxa transação (3,2%)" value={`− ${formatCurrency(ifoodSummary.taxaTransacao)}`} dim />
+                  <SummaryRow label="Total de taxas" value={`− ${formatCurrency(ifoodSummary.taxa)}`} positive={false} />
+                </div>
                 <SummaryRow label="Valor líquido recebido" value={formatCurrency(ifoodSummary.netRevenue)} />
                 <SummaryRow label="Custo dos ingredientes" value={`− ${formatCurrency(ifoodSummary.totalCost)}`} dim />
                 <SummaryRow label="Despesas fixas do dia" value={`− ${formatCurrency(ifoodSummary.dailyExp)}`} dim />
@@ -340,9 +351,9 @@ export default function Sales({ enrichedProducts, enrichedCombos = [], totalExpe
   }
 
   // ── Summaries ──
-  const ifoodRate      = IFOOD_PLANS[ifoodPlan].rate
+  const ifoodComissao  = IFOOD_PLANS[ifoodPlan].comissao
   const directSummary  = calcSummary(directQty, allItems, totalExpenses, 0)
-  const ifoodSummary   = calcSummary(ifoodQty,  allItems, totalExpenses, ifoodRate)
+  const ifoodSummary   = calcSummary(ifoodQty,  allItems, totalExpenses, ifoodComissao)
   const currentSummary = channel === 'direto' ? directSummary : ifoodSummary
 
   // ── Close day ──
@@ -464,22 +475,38 @@ export default function Sales({ enrichedProducts, enrichedCombos = [], totalExpe
         })}
       </div>
 
-      {/* iFood plan selector */}
+      {/* iFood — Configurações */}
       {channel === 'ifood' && !ifoodClosed && (
-        <div className="flex items-center gap-3 mb-5 p-3 bg-gray-900 border border-gray-800 rounded-xl">
-          <span className="text-gray-400 text-sm shrink-0">Plano:</span>
-          <div className="relative flex-1">
-            <select
-              value={ifoodPlan} onChange={(e) => setIfoodPlan(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500 appearance-none cursor-pointer"
-            >
-              {Object.entries(IFOOD_PLANS).map(([key, { label }]) => (
-                <option key={key} value={key}>{label}</option>
-              ))}
-            </select>
-            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+        <div className="mb-5 p-4 bg-gray-900 border border-gray-800 rounded-xl space-y-3">
+          <p className="text-gray-400 text-xs font-semibold uppercase tracking-wider">⚙️ Configurações iFood</p>
+          <div className="flex items-center gap-3">
+            <span className="text-gray-400 text-sm shrink-0">Plano de comissão:</span>
+            <div className="relative flex-1">
+              <select
+                value={ifoodPlan} onChange={(e) => setIfoodPlan(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500 appearance-none cursor-pointer"
+              >
+                {Object.entries(IFOOD_PLANS).map(([key, { label, comissao }]) => (
+                  <option key={key} value={key}>{label} ({(comissao * 100).toFixed(0)}%)</option>
+                ))}
+              </select>
+              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+            </div>
           </div>
-          <span className="text-orange-400 text-sm font-bold shrink-0">−{(IFOOD_PLANS[ifoodPlan].rate * 100).toFixed(0)}%</span>
+          <div className="grid grid-cols-3 gap-2 text-xs">
+            <div className="bg-gray-800 rounded-lg p-2 text-center">
+              <p className="text-gray-500">Comissão</p>
+              <p className="text-red-400 font-bold mt-0.5">−{(ifoodComissao * 100).toFixed(0)}%</p>
+            </div>
+            <div className="bg-gray-800 rounded-lg p-2 text-center">
+              <p className="text-gray-500">Taxa transação</p>
+              <p className="text-red-400 font-bold mt-0.5">−3,2%</p>
+            </div>
+            <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-2 text-center">
+              <p className="text-gray-500">Total descontado</p>
+              <p className="text-orange-400 font-bold mt-0.5">−{((ifoodComissao + TAXA_TRANSACAO) * 100).toFixed(1)}%</p>
+            </div>
+          </div>
         </div>
       )}
 
@@ -540,7 +567,7 @@ export default function Sales({ enrichedProducts, enrichedCombos = [], totalExpe
           <div className="space-y-2">
             {history.slice(0, 30).map(day => {
               const dSum = day.channels.direto ? calcSummaryFromItems(day.channels.direto.vendas_itens || [], totalExpenses, 0) : null
-              const iSum = day.channels.ifood  ? calcSummaryFromItems(day.channels.ifood.vendas_itens  || [], totalExpenses, ifoodRate) : null
+              const iSum = day.channels.ifood  ? calcSummaryFromItems(day.channels.ifood.vendas_itens  || [], totalExpenses, ifoodComissao) : null
               const totRevenue = (dSum?.revenue || 0) + (iSum?.revenue || 0)
               const totProfit  = (dSum?.realProfit || 0) + (iSum?.realProfit || 0)
               const totItems   = (dSum?.totalItems || 0) + (iSum?.totalItems || 0)
@@ -579,7 +606,9 @@ export default function Sales({ enrichedProducts, enrichedCombos = [], totalExpe
                           <p className="text-orange-400 font-semibold mb-2">🟠 iFood</p>
                           <p className="text-gray-400">Itens: {iSum.totalItems}</p>
                           <p className="text-gray-400">Faturamento: {formatCurrency(iSum.revenue)}</p>
-                          <p className="text-gray-400">Taxa: −{formatCurrency(iSum.taxa)}</p>
+                          <p className="text-gray-500">Comissão: −{formatCurrency(iSum.comissao)}</p>
+                          <p className="text-gray-500">Taxa transação: −{formatCurrency(iSum.taxaTransacao)}</p>
+                          <p className="text-gray-400">Líquido: {formatCurrency(iSum.netRevenue)}</p>
                           <p className="text-gray-400">Custo: −{formatCurrency(iSum.totalCost)}</p>
                           <p className={iSum.realProfit >= 0 ? 'text-green-400' : 'text-red-400'}>Lucro: {formatCurrency(iSum.realProfit)}</p>
                           <p className="text-gray-500">Margem: {iSum.margin.toFixed(1)}%</p>
@@ -602,6 +631,7 @@ export default function Sales({ enrichedProducts, enrichedCombos = [], totalExpe
         ifoodSummary={ifoodSummary}
         date={date}
         ifoodPlan={ifoodPlan}
+        ifoodComissao={ifoodComissao}
         saving={saving}
       />
     </div>
