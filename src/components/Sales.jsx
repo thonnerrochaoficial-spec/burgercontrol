@@ -70,61 +70,52 @@ function calcSummaryFromItems(dbItems, totalExpenses, rate = 0) {
   return { totalItems, revenue, taxa, netRevenue, totalCost, dailyExp, grossProfit, realProfit, margin }
 }
 
-// ── SaleCard — grid card for a product or combo ────────────────────────────
+// ── SaleCard — horizontal row card ────────────────────────────────────────
 function SaleCard({ item, qty, rawVal, onRaw, onBlur, onInc, onDec, disabled }) {
   const q     = Number(qty) || 0
   const total = q * item.salePrice
   return (
-    <div className={`bg-gray-900 border border-gray-800 rounded-xl overflow-hidden flex flex-col transition-colors ${q > 0 ? 'border-orange-500/40' : ''} ${disabled ? 'opacity-60' : ''}`}>
-      {/* Image area */}
-      <div className="relative aspect-square bg-gray-800 flex items-center justify-center">
+    <div className={`bg-gray-800/60 border border-gray-700/50 rounded-xl flex items-center gap-3 px-3 py-2.5 transition-colors ${q > 0 ? 'border-orange-500/50 bg-gray-800/80' : ''} ${disabled ? 'opacity-60' : ''}`}>
+      {/* Square photo */}
+      <div className="relative w-[60px] h-[60px] shrink-0 rounded-lg overflow-hidden bg-gray-700 flex items-center justify-center">
         {item.image
           ? <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
-          : <span className="text-2xl">{item.emoji || '🍔'}</span>}
+          : <span className="text-3xl">{item.emoji || '🍔'}</span>}
         {item.type === 'combo' && (
-          <span className="absolute top-1 left-1 bg-purple-500 text-white text-[8px] font-bold px-1 py-0.5 rounded-full uppercase tracking-wide">
+          <span className="absolute bottom-0 left-0 right-0 bg-purple-600/90 text-white text-[8px] font-bold text-center py-0.5 uppercase tracking-wide">
             Combo
-          </span>
-        )}
-        {q > 0 && (
-          <span className="absolute top-1 right-1 bg-orange-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
-            {q}
           </span>
         )}
       </div>
 
-      {/* Info + controls */}
-      <div className="p-1.5 flex flex-col gap-1">
-        <div>
-          <p className="text-white text-[10px] font-bold leading-tight truncate">{item.name}</p>
-          <p className="text-orange-400 text-[10px] font-semibold">{formatCurrency(item.salePrice)}</p>
-        </div>
+      {/* Name + price */}
+      <div className="flex-1 min-w-0">
+        <p className="text-white text-sm font-bold uppercase leading-tight truncate">{item.name}</p>
+        <p className="text-orange-400 text-sm font-semibold mt-0.5">{formatCurrency(item.salePrice)}</p>
+        {q > 0 && (
+          <p className="text-green-400 text-xs font-medium mt-0.5">= {formatCurrency(total)}</p>
+        )}
+      </div>
 
-        {/* Qty controls */}
-        <div className="flex items-center justify-between gap-0.5">
-          <button
-            onClick={onDec} disabled={disabled || q <= 0}
-            className="w-6 h-6 rounded-md bg-gray-800 hover:bg-gray-700 flex items-center justify-center text-gray-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer shrink-0"
-          ><Minus size={10} /></button>
-          <input
-            type="text" inputMode="numeric"
-            value={rawVal !== undefined ? rawVal : (q > 0 ? String(q) : '')}
-            onChange={(e) => onRaw(e.target.value.replace(/[^0-9]/g, ''))}
-            onBlur={() => onBlur(rawVal !== undefined ? rawVal : String(q))}
-            disabled={disabled}
-            placeholder="0"
-            className="flex-1 min-w-0 text-center bg-gray-800 border border-gray-700 rounded-md py-0.5 text-white text-[11px] font-bold focus:outline-none focus:border-orange-500 transition-colors disabled:cursor-not-allowed"
-          />
-          <button
-            onClick={onInc} disabled={disabled}
-            className="w-6 h-6 rounded-md bg-gray-800 hover:bg-orange-500 flex items-center justify-center text-gray-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer shrink-0"
-          ><Plus size={10} /></button>
-        </div>
-
-        {/* Total */}
-        <p className={`text-center text-[10px] font-bold ${total > 0 ? 'text-green-400' : 'text-gray-700'}`}>
-          {total > 0 ? formatCurrency(total) : '—'}
-        </p>
+      {/* Qty controls */}
+      <div className="flex items-center gap-1.5 shrink-0">
+        <button
+          onClick={onDec} disabled={disabled || q <= 0}
+          className="w-9 h-9 rounded-xl bg-gray-700 hover:bg-gray-600 flex items-center justify-center text-gray-300 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+        ><Minus size={14} /></button>
+        <input
+          type="text" inputMode="numeric"
+          value={rawVal !== undefined ? rawVal : (q > 0 ? String(q) : '')}
+          onChange={(e) => onRaw(e.target.value.replace(/[^0-9]/g, ''))}
+          onBlur={() => onBlur(rawVal !== undefined ? rawVal : String(q))}
+          disabled={disabled}
+          placeholder="0"
+          className="w-10 text-center bg-gray-700 border border-gray-600 rounded-lg py-1.5 text-white text-sm font-bold focus:outline-none focus:border-orange-500 transition-colors disabled:cursor-not-allowed"
+        />
+        <button
+          onClick={onInc} disabled={disabled}
+          className="w-9 h-9 rounded-xl bg-orange-500 hover:bg-orange-600 flex items-center justify-center text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+        ><Plus size={14} /></button>
       </div>
     </div>
   )
@@ -406,7 +397,7 @@ export default function Sales({ enrichedProducts, enrichedCombos = [], totalExpe
     return (
       <div className="mb-6">
         <h3 className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-3">{label}</h3>
-        <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           {items.map(item => (
             <SaleCard
               key={item.id} item={item}
@@ -427,7 +418,7 @@ export default function Sales({ enrichedProducts, enrichedCombos = [], totalExpe
   const bothClosed = directClosed && ifoodClosed
 
   return (
-    <div className="p-4 md:p-6 max-w-5xl mx-auto">
+    <div className="p-4 md:p-6 max-w-4xl mx-auto">
       {/* Page header */}
       <div className="flex items-center justify-between mb-6">
         <div>
