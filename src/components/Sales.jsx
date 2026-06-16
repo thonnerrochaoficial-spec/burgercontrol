@@ -80,32 +80,32 @@ function SaleCard({ item, qty, rawVal, onRaw, onBlur, onInc, onDec, disabled }) 
       <div className="relative aspect-square bg-gray-800 flex items-center justify-center">
         {item.image
           ? <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
-          : <span className="text-4xl">{item.emoji || '🍔'}</span>}
+          : <span className="text-2xl">{item.emoji || '🍔'}</span>}
         {item.type === 'combo' && (
-          <span className="absolute top-2 left-2 bg-purple-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide">
+          <span className="absolute top-1 left-1 bg-purple-500 text-white text-[8px] font-bold px-1 py-0.5 rounded-full uppercase tracking-wide">
             Combo
           </span>
         )}
         {q > 0 && (
-          <span className="absolute top-2 right-2 bg-orange-500 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
+          <span className="absolute top-1 right-1 bg-orange-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
             {q}
           </span>
         )}
       </div>
 
       {/* Info + controls */}
-      <div className="p-2.5 flex flex-col gap-2">
+      <div className="p-1.5 flex flex-col gap-1">
         <div>
-          <p className="text-white text-xs font-bold leading-tight truncate">{item.name}</p>
-          <p className="text-orange-400 text-xs font-semibold mt-0.5">{formatCurrency(item.salePrice)}</p>
+          <p className="text-white text-[10px] font-bold leading-tight truncate">{item.name}</p>
+          <p className="text-orange-400 text-[10px] font-semibold">{formatCurrency(item.salePrice)}</p>
         </div>
 
         {/* Qty controls */}
-        <div className="flex items-center justify-between gap-1">
+        <div className="flex items-center justify-between gap-0.5">
           <button
             onClick={onDec} disabled={disabled || q <= 0}
-            className="w-7 h-7 rounded-lg bg-gray-800 hover:bg-gray-700 flex items-center justify-center text-gray-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer shrink-0"
-          ><Minus size={12} /></button>
+            className="w-6 h-6 rounded-md bg-gray-800 hover:bg-gray-700 flex items-center justify-center text-gray-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer shrink-0"
+          ><Minus size={10} /></button>
           <input
             type="text" inputMode="numeric"
             value={rawVal !== undefined ? rawVal : (q > 0 ? String(q) : '')}
@@ -113,16 +113,16 @@ function SaleCard({ item, qty, rawVal, onRaw, onBlur, onInc, onDec, disabled }) 
             onBlur={() => onBlur(rawVal !== undefined ? rawVal : String(q))}
             disabled={disabled}
             placeholder="0"
-            className="flex-1 min-w-0 text-center bg-gray-800 border border-gray-700 rounded-lg py-1 text-white text-sm font-bold focus:outline-none focus:border-orange-500 transition-colors disabled:cursor-not-allowed"
+            className="flex-1 min-w-0 text-center bg-gray-800 border border-gray-700 rounded-md py-0.5 text-white text-[11px] font-bold focus:outline-none focus:border-orange-500 transition-colors disabled:cursor-not-allowed"
           />
           <button
             onClick={onInc} disabled={disabled}
-            className="w-7 h-7 rounded-lg bg-gray-800 hover:bg-orange-500 flex items-center justify-center text-gray-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer shrink-0"
-          ><Plus size={12} /></button>
+            className="w-6 h-6 rounded-md bg-gray-800 hover:bg-orange-500 flex items-center justify-center text-gray-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer shrink-0"
+          ><Plus size={10} /></button>
         </div>
 
         {/* Total */}
-        <p className={`text-center text-xs font-bold ${total > 0 ? 'text-green-400' : 'text-gray-700'}`}>
+        <p className={`text-center text-[10px] font-bold ${total > 0 ? 'text-green-400' : 'text-gray-700'}`}>
           {total > 0 ? formatCurrency(total) : '—'}
         </p>
       </div>
@@ -406,7 +406,7 @@ export default function Sales({ enrichedProducts, enrichedCombos = [], totalExpe
     return (
       <div className="mb-6">
         <h3 className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-3">{label}</h3>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
           {items.map(item => (
             <SaleCard
               key={item.id} item={item}
@@ -427,7 +427,7 @@ export default function Sales({ enrichedProducts, enrichedCombos = [], totalExpe
   const bothClosed = directClosed && ifoodClosed
 
   return (
-    <div className="p-4 md:p-6 max-w-4xl mx-auto">
+    <div className="p-4 md:p-6 max-w-5xl mx-auto">
       {/* Page header */}
       <div className="flex items-center justify-between mb-6">
         <div>
