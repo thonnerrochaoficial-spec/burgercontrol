@@ -1,4 +1,4 @@
-import { LayoutDashboard, ShoppingBag, Package, Receipt, BarChart3, ChefHat, Settings, LogOut } from 'lucide-react'
+import { LayoutDashboard, ShoppingBag, Package, Receipt, BarChart3, ChefHat, Settings, LogOut, ShoppingCart } from 'lucide-react'
 import { formatCurrency } from '../utils'
 
 const navItems = [
@@ -8,6 +8,7 @@ const navItems = [
   { tab: 'ingredients', label: 'Receitas',      icon: ChefHat },
   { tab: 'expenses',    label: 'Despesas',      icon: Receipt },
   { tab: 'analytics',  label: 'Análises',      icon: BarChart3 },
+  { tab: 'sales',       label: 'Vendas',        icon: ShoppingCart },
   { tab: null,          label: 'Configurações', icon: Settings },
 ]
 

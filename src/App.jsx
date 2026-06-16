@@ -10,6 +10,7 @@ import Products from './components/Products'
 import Ingredients from './components/Ingredients'
 import Expenses from './components/Expenses'
 import Analytics from './components/Analytics'
+import Sales from './components/Sales'
 import InstallBanner from './components/InstallBanner'
 import { getIngredientRecipeInfo } from './utils'
 
@@ -434,6 +435,13 @@ function AppInner() {
             totalExpenses={totalExpenses}
             expensePerUnit={expensePerUnit}
             monthlyUnits={monthlyUnits}
+          />
+        )
+      case 'sales':
+        return (
+          <Sales
+            enrichedProducts={enrichedProducts}
+            totalExpenses={totalExpenses}
           />
         )
       default:

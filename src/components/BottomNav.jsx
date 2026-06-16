@@ -1,11 +1,11 @@
-import { LayoutDashboard, ShoppingBag, Package, Receipt, BarChart3 } from 'lucide-react'
+import { LayoutDashboard, ShoppingBag, Package, Receipt, ShoppingCart } from 'lucide-react'
 
 const navItems = [
   { id: 'dashboard',   label: 'Dashboard', icon: LayoutDashboard },
   { id: 'products',    label: 'Produtos',  icon: ShoppingBag },
   { id: 'ingredients', label: 'Insumos',   icon: Package },
   { id: 'expenses',    label: 'Despesas',  icon: Receipt },
-  { id: 'analytics',  label: 'Análises',  icon: BarChart3 },
+  { id: 'sales',       label: 'Vendas',    icon: ShoppingCart },
 ]
 
 export default function BottomNav({ activeTab, setActiveTab }) {
