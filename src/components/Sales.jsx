@@ -19,13 +19,11 @@ const todayStr = () => {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
-
 const fmtDate = (iso) => {
   const [y, m, day] = iso.split('-')
   const names = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
   return `${day}/${names[Number(m) - 1]}/${y}`
 }
-
 const fmtDateLong = (iso) => {
   const months = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
   const weekdays = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado']
@@ -34,34 +32,29 @@ const fmtDateLong = (iso) => {
   return `${weekdays[date.getDay()]}, ${Number(d)} de ${months[Number(m) - 1]}`
 }
 
-// ── Draft helpers (localStorage) ──────────────────────────────────────────
-const draftKey = (date, ch) => `bc_sales_${date}_${ch}`
-const loadDraft = (date, ch) => {
-  try { const s = localStorage.getItem(draftKey(date, ch)); return s ? JSON.parse(s) : {} } catch { return {} }
-}
-const saveDraft = (date, ch, qty) => {
-  try { localStorage.setItem(draftKey(date, ch), JSON.stringify(qty)) } catch { /* quota */ }
-}
-const clearDraft = (date, ch) => {
-  try { localStorage.removeItem(draftKey(date, ch)) } catch { /* ignore */ }
-}
+// ── Draft helpers ──────────────────────────────────────────────────────────
+const draftKey  = (date, ch) => `bc_sales_${date}_${ch}`
+const loadDraft = (date, ch) => { try { const s = localStorage.getItem(draftKey(date, ch)); return s ? JSON.parse(s) : {} } catch { return {} } }
+const saveDraft = (date, ch, qty) => { try { localStorage.setItem(draftKey(date, ch), JSON.stringify(qty)) } catch { /* quota */ } }
+const clearDraft = (date, ch) => { try { localStorage.removeItem(draftKey(date, ch)) } catch { /* ignore */ } }
 
 // ── Summary calculations ───────────────────────────────────────────────────
-function calcSummary(qty, products, totalExpenses, rate = 0) {
-  const items = products
-    .map(p => { const q = Math.max(0, Number(qty[p.id]) || 0); return { p, q } })
+// allItems: unified array of products + combos, each with { id, salePrice, ingredientCost, ... }
+function calcSummary(qty, allItems, totalExpenses, rate = 0) {
+  const rows = allItems
+    .map(item => { const q = Math.max(0, Number(qty[item.id]) || 0); return { item, q } })
     .filter(({ q }) => q > 0)
-  const totalItems = items.reduce((s, { q }) => s + q, 0)
-  const revenue    = items.reduce((s, { p, q }) => s + q * p.salePrice, 0)
-  const taxa       = revenue * rate
-  const netRevenue = revenue - taxa
-  const totalCost  = items.reduce((s, { p, q }) => s + q * p.ingredientCost, 0)
-  const dailyExp   = totalExpenses / 30
+  const totalItems  = rows.reduce((s, { q }) => s + q, 0)
+  const revenue     = rows.reduce((s, { item, q }) => s + q * item.salePrice, 0)
+  const taxa        = revenue * rate
+  const netRevenue  = revenue - taxa
+  const totalCost   = rows.reduce((s, { item, q }) => s + q * item.ingredientCost, 0)
+  const dailyExp    = totalExpenses / 30
   const grossProfit = netRevenue - totalCost
   const realProfit  = grossProfit - dailyExp
-  const margin = revenue > 0 ? (realProfit / revenue) * 100 : 0
-  const topProduct = items.length > 0 ? items.reduce((best, i) => i.q > best.q ? i : best, items[0]) : null
-  return { items, totalItems, revenue, taxa, netRevenue, totalCost, dailyExp, grossProfit, realProfit, margin, topProduct }
+  const margin      = revenue > 0 ? (realProfit / revenue) * 100 : 0
+  const topProduct  = rows.length > 0 ? rows.reduce((best, r) => r.q > best.q ? r : best, rows[0]) : null
+  return { rows, totalItems, revenue, taxa, netRevenue, totalCost, dailyExp, grossProfit, realProfit, margin, topProduct }
 }
 
 function calcSummaryFromItems(dbItems, totalExpenses, rate = 0) {
@@ -73,11 +66,71 @@ function calcSummaryFromItems(dbItems, totalExpenses, rate = 0) {
   const dailyExp    = totalExpenses / 30
   const grossProfit = netRevenue - totalCost
   const realProfit  = grossProfit - dailyExp
-  const margin = revenue > 0 ? (realProfit / revenue) * 100 : 0
+  const margin      = revenue > 0 ? (realProfit / revenue) * 100 : 0
   return { totalItems, revenue, taxa, netRevenue, totalCost, dailyExp, grossProfit, realProfit, margin }
 }
 
-// ── Sub-components ─────────────────────────────────────────────────────────
+// ── SaleCard — grid card for a product or combo ────────────────────────────
+function SaleCard({ item, qty, rawVal, onRaw, onBlur, onInc, onDec, disabled }) {
+  const q     = Number(qty) || 0
+  const total = q * item.salePrice
+  return (
+    <div className={`bg-gray-900 border border-gray-800 rounded-xl overflow-hidden flex flex-col transition-colors ${q > 0 ? 'border-orange-500/40' : ''} ${disabled ? 'opacity-60' : ''}`}>
+      {/* Image area */}
+      <div className="relative aspect-square bg-gray-800 flex items-center justify-center">
+        {item.image
+          ? <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+          : <span className="text-4xl">{item.emoji || '🍔'}</span>}
+        {item.type === 'combo' && (
+          <span className="absolute top-2 left-2 bg-purple-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide">
+            Combo
+          </span>
+        )}
+        {q > 0 && (
+          <span className="absolute top-2 right-2 bg-orange-500 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
+            {q}
+          </span>
+        )}
+      </div>
+
+      {/* Info + controls */}
+      <div className="p-2.5 flex flex-col gap-2">
+        <div>
+          <p className="text-white text-xs font-bold leading-tight truncate">{item.name}</p>
+          <p className="text-orange-400 text-xs font-semibold mt-0.5">{formatCurrency(item.salePrice)}</p>
+        </div>
+
+        {/* Qty controls */}
+        <div className="flex items-center justify-between gap-1">
+          <button
+            onClick={onDec} disabled={disabled || q <= 0}
+            className="w-7 h-7 rounded-lg bg-gray-800 hover:bg-gray-700 flex items-center justify-center text-gray-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer shrink-0"
+          ><Minus size={12} /></button>
+          <input
+            type="text" inputMode="numeric"
+            value={rawVal !== undefined ? rawVal : (q > 0 ? String(q) : '')}
+            onChange={(e) => onRaw(e.target.value.replace(/[^0-9]/g, ''))}
+            onBlur={() => onBlur(rawVal !== undefined ? rawVal : String(q))}
+            disabled={disabled}
+            placeholder="0"
+            className="flex-1 min-w-0 text-center bg-gray-800 border border-gray-700 rounded-lg py-1 text-white text-sm font-bold focus:outline-none focus:border-orange-500 transition-colors disabled:cursor-not-allowed"
+          />
+          <button
+            onClick={onInc} disabled={disabled}
+            className="w-7 h-7 rounded-lg bg-gray-800 hover:bg-orange-500 flex items-center justify-center text-gray-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer shrink-0"
+          ><Plus size={12} /></button>
+        </div>
+
+        {/* Total */}
+        <p className={`text-center text-xs font-bold ${total > 0 ? 'text-green-400' : 'text-gray-700'}`}>
+          {total > 0 ? formatCurrency(total) : '—'}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+// ── SummaryModal ───────────────────────────────────────────────────────────
 function SummaryRow({ label, value, dim, positive, bold }) {
   return (
     <div className="flex justify-between items-center">
@@ -85,48 +138,6 @@ function SummaryRow({ label, value, dim, positive, bold }) {
       <span className={`${bold ? 'font-bold' : 'font-medium'} ${
         positive === true ? 'text-green-400' : positive === false ? 'text-red-400' : dim ? 'text-gray-500' : 'text-white'
       }`}>{value}</span>
-    </div>
-  )
-}
-
-function ProductRow({ product: p, qty, rawVal, onRaw, onBlur, onInc, onDec, disabled }) {
-  const q = Number(qty) || 0
-  const total = q * p.salePrice
-  return (
-    <div className={`flex items-center gap-3 py-3 border-b border-gray-800/60 last:border-0 ${disabled ? 'opacity-60' : ''}`}>
-      <div className="w-10 h-10 rounded-xl overflow-hidden bg-gray-800 flex items-center justify-center shrink-0">
-        {p.image
-          ? <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
-          : <span className="text-xl">{p.emoji || '🍔'}</span>}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-white text-sm font-medium truncate">{p.name}</p>
-        <p className="text-gray-500 text-xs">{formatCurrency(p.salePrice)}</p>
-      </div>
-      <div className="flex items-center gap-1.5 shrink-0">
-        <button
-          onClick={onDec} disabled={disabled || q <= 0}
-          className="w-7 h-7 rounded-lg bg-gray-800 hover:bg-gray-700 flex items-center justify-center text-gray-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-        ><Minus size={13} /></button>
-        <input
-          type="text" inputMode="numeric"
-          value={rawVal !== undefined ? rawVal : (q > 0 ? String(q) : '')}
-          onChange={(e) => onRaw(e.target.value.replace(/[^0-9]/g, ''))}
-          onBlur={() => onBlur(rawVal !== undefined ? rawVal : String(q))}
-          disabled={disabled}
-          placeholder="0"
-          className="w-12 text-center bg-gray-800 border border-gray-700 rounded-lg py-1 text-white text-sm font-semibold focus:outline-none focus:border-orange-500 transition-colors disabled:cursor-not-allowed"
-        />
-        <button
-          onClick={onInc} disabled={disabled}
-          className="w-7 h-7 rounded-lg bg-gray-800 hover:bg-orange-500 flex items-center justify-center text-gray-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-        ><Plus size={13} /></button>
-      </div>
-      <div className="w-20 text-right shrink-0">
-        <span className={`text-sm font-bold ${total > 0 ? 'text-orange-400' : 'text-gray-700'}`}>
-          {total > 0 ? formatCurrency(total) : '—'}
-        </span>
-      </div>
     </div>
   )
 }
@@ -153,7 +164,6 @@ function SummaryModal({ isOpen, onClose, onConfirm, directSummary, ifoodSummary,
         </div>
 
         <div className="p-5 space-y-5">
-          {/* Direto */}
           {hasD && (
             <section>
               <h3 className="text-white font-semibold text-sm mb-3 flex items-center gap-2">
@@ -170,13 +180,12 @@ function SummaryModal({ isOpen, onClose, onConfirm, directSummary, ifoodSummary,
                   <SummaryRow label="Margem real" value={`${directSummary.margin.toFixed(1)}%`} />
                 </div>
                 {directSummary.topProduct && (
-                  <p className="text-gray-500 text-xs pt-1">⭐ Mais vendido: <span className="text-white">{directSummary.topProduct.p.emoji} {directSummary.topProduct.p.name}</span> ({directSummary.topProduct.q}×)</p>
+                  <p className="text-gray-500 text-xs pt-1">⭐ Mais vendido: <span className="text-white">{directSummary.topProduct.item.emoji || ''} {directSummary.topProduct.item.name}</span> ({directSummary.topProduct.q}×)</p>
                 )}
               </div>
             </section>
           )}
 
-          {/* iFood */}
           {hasI && (
             <section>
               <h3 className="text-white font-semibold text-sm mb-3 flex items-center gap-2">
@@ -194,13 +203,12 @@ function SummaryModal({ isOpen, onClose, onConfirm, directSummary, ifoodSummary,
                   <SummaryRow label="Margem real no iFood" value={`${ifoodSummary.margin.toFixed(1)}%`} />
                 </div>
                 {ifoodSummary.topProduct && (
-                  <p className="text-gray-500 text-xs pt-1">⭐ Mais vendido: <span className="text-white">{ifoodSummary.topProduct.p.emoji} {ifoodSummary.topProduct.p.name}</span> ({ifoodSummary.topProduct.q}×)</p>
+                  <p className="text-gray-500 text-xs pt-1">⭐ Mais vendido: <span className="text-white">{ifoodSummary.topProduct.item.emoji || ''} {ifoodSummary.topProduct.item.name}</span> ({ifoodSummary.topProduct.q}×)</p>
                 )}
               </div>
             </section>
           )}
 
-          {/* Resumo Geral */}
           {(hasD || hasI) && (
             <section>
               <h3 className="text-white font-semibold text-sm mb-3 flex items-center gap-2">
@@ -226,8 +234,7 @@ function SummaryModal({ isOpen, onClose, onConfirm, directSummary, ifoodSummary,
             Cancelar
           </button>
           <button
-            onClick={onConfirm}
-            disabled={saving || (!hasD && !hasI)}
+            onClick={onConfirm} disabled={saving || (!hasD && !hasI)}
             className="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-xl font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
           >
             {saving
@@ -241,27 +248,31 @@ function SummaryModal({ isOpen, onClose, onConfirm, directSummary, ifoodSummary,
 }
 
 // ── Main component ─────────────────────────────────────────────────────────
-export default function Sales({ enrichedProducts, totalExpenses }) {
+export default function Sales({ enrichedProducts, enrichedCombos = [], totalExpenses }) {
   const { user } = useAuth()
 
-  const [date, setDate]               = useState(todayStr)
-  const [channel, setChannel]         = useState('direto')
-  const [ifoodPlan, setIfoodPlan]     = useState(() => localStorage.getItem('bc_ifood_plan') || 'basico')
-  const [directQty, setDirectQty]     = useState({})
-  const [ifoodQty, setIfoodQty]       = useState({})
-  const [rawVals, setRawVals]         = useState({})
+  const [date, setDate]                 = useState(todayStr)
+  const [channel, setChannel]           = useState('direto')
+  const [ifoodPlan, setIfoodPlan]       = useState(() => localStorage.getItem('bc_ifood_plan') || 'basico')
+  const [directQty, setDirectQty]       = useState({})
+  const [ifoodQty, setIfoodQty]         = useState({})
+  const [rawVals, setRawVals]           = useState({})
   const [directClosed, setDirectClosed] = useState(false)
   const [ifoodClosed, setIfoodClosed]   = useState(false)
-  const [history, setHistory]         = useState([])
-  const [showSummary, setShowSummary] = useState(false)
-  const [saving, setSaving]           = useState(false)
-  const [expandedDay, setExpandedDay] = useState(null)
+  const [history, setHistory]           = useState([])
+  const [showSummary, setShowSummary]   = useState(false)
+  const [saving, setSaving]             = useState(false)
+  const [expandedDay, setExpandedDay]   = useState(null)
 
-  // Persist iFood plan choice
+  // Unified item list (products first, then combos)
+  const allItems = [
+    ...enrichedProducts.map(p => ({ ...p, type: 'product' })),
+    ...enrichedCombos.map(c => ({ ...c, type: 'combo' })),
+  ]
+
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { localStorage.setItem('bc_ifood_plan', ifoodPlan) }, [ifoodPlan])
 
-  // Load day data when date or user changes
   useEffect(() => {
     if (!user) return
     loadDayData(date)
@@ -269,42 +280,39 @@ export default function Sales({ enrichedProducts, totalExpenses }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date, user])
 
-  // Auto-save drafts to localStorage
   useEffect(() => { if (!directClosed) saveDraft(date, 'direto', directQty) }, [directQty, date, directClosed])
   useEffect(() => { if (!ifoodClosed)  saveDraft(date, 'ifood',  ifoodQty)  }, [ifoodQty,  date, ifoodClosed])
 
-  // Load history on mount
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (user) loadHistory() }, [user])
 
   const loadDayData = async (d) => {
     const { data } = await supabase
       .from('vendas_dia')
-      .select('*, vendas_itens(produto_id, quantidade, preco_venda, custo)')
+      .select('*, vendas_itens(produto_id, combo_id, quantidade, preco_venda, custo)')
       .eq('user_id', user.id)
       .eq('data', d)
+
+    const restore = (items) => {
+      const q = {}
+      items?.forEach(i => { const id = i.combo_id || i.produto_id; if (id) q[id] = i.quantidade })
+      return q
+    }
 
     const direct = data?.find(vd => vd.canal === 'direto')
     const ifood  = data?.find(vd => vd.canal === 'ifood')
 
-    if (direct?.fechado) {
-      setDirectClosed(true)
-      const q = {}; direct.vendas_itens?.forEach(i => { q[i.produto_id] = i.quantidade }); setDirectQty(q)
-    } else {
-      setDirectClosed(false); setDirectQty(loadDraft(d, 'direto'))
-    }
-    if (ifood?.fechado) {
-      setIfoodClosed(true)
-      const q = {}; ifood.vendas_itens?.forEach(i => { q[i.produto_id] = i.quantidade }); setIfoodQty(q)
-    } else {
-      setIfoodClosed(false); setIfoodQty(loadDraft(d, 'ifood'))
-    }
+    if (direct?.fechado) { setDirectClosed(true); setDirectQty(restore(direct.vendas_itens)) }
+    else { setDirectClosed(false); setDirectQty(loadDraft(d, 'direto')) }
+
+    if (ifood?.fechado) { setIfoodClosed(true); setIfoodQty(restore(ifood.vendas_itens)) }
+    else { setIfoodClosed(false); setIfoodQty(loadDraft(d, 'ifood')) }
   }
 
   const loadHistory = async () => {
     const { data } = await supabase
       .from('vendas_dia')
-      .select('*, vendas_itens(produto_id, quantidade, preco_venda, custo)')
+      .select('*, vendas_itens(produto_id, combo_id, quantidade, preco_venda, custo)')
       .eq('user_id', user.id)
       .eq('fechado', true)
       .order('data', { ascending: false })
@@ -323,18 +331,27 @@ export default function Sales({ enrichedProducts, totalExpenses }) {
   const setActiveQty = channel === 'direto' ? setDirectQty : setIfoodQty
   const isClosed     = channel === 'direto' ? directClosed : ifoodClosed
 
-  const commitQty = (productId, raw) => {
+  const commitQty = (id, raw) => {
     const n = Math.max(0, Number(raw) || 0)
-    setActiveQty(prev => ({ ...prev, [productId]: n }))
-    setRawVals(rv => { const r = { ...rv }; delete r[productId]; return r })
+    setActiveQty(prev => ({ ...prev, [id]: n }))
+    setRawVals(rv => { const r = { ...rv }; delete r[id]; return r })
   }
-  const handleInc = (id) => { setActiveQty(prev => ({ ...prev, [id]: (Number(prev[id]) || 0) + 1 })); setRawVals(rv => { const r = { ...rv }; delete r[id]; return r }) }
-  const handleDec = (id) => { const curr = Number(activeQty[id]) || 0; if (curr > 0) { setActiveQty(prev => ({ ...prev, [id]: curr - 1 })); setRawVals(rv => { const r = { ...rv }; delete r[id]; return r }) } }
+  const handleInc = (id) => {
+    setActiveQty(prev => ({ ...prev, [id]: (Number(prev[id]) || 0) + 1 }))
+    setRawVals(rv => { const r = { ...rv }; delete r[id]; return r })
+  }
+  const handleDec = (id) => {
+    const curr = Number(activeQty[id]) || 0
+    if (curr > 0) {
+      setActiveQty(prev => ({ ...prev, [id]: curr - 1 }))
+      setRawVals(rv => { const r = { ...rv }; delete r[id]; return r })
+    }
+  }
 
   // ── Summaries ──
-  const ifoodRate     = IFOOD_PLANS[ifoodPlan].rate
-  const directSummary = calcSummary(directQty, enrichedProducts, totalExpenses, 0)
-  const ifoodSummary  = calcSummary(ifoodQty,  enrichedProducts, totalExpenses, ifoodRate)
+  const ifoodRate      = IFOOD_PLANS[ifoodPlan].rate
+  const directSummary  = calcSummary(directQty, allItems, totalExpenses, 0)
+  const ifoodSummary   = calcSummary(ifoodQty,  allItems, totalExpenses, ifoodRate)
   const currentSummary = channel === 'direto' ? directSummary : ifoodSummary
 
   // ── Close day ──
@@ -343,13 +360,21 @@ export default function Sales({ enrichedProducts, totalExpenses }) {
     try {
       for (const ch of ['direto', 'ifood']) {
         const chQty = ch === 'direto' ? directQty : ifoodQty
-        const items = enrichedProducts
-          .filter(p => Number(chQty[p.id]) > 0)
-          .map(p => ({ produto_id: p.id, quantidade: Number(chQty[p.id]), preco_venda: p.salePrice, custo: p.ingredientCost }))
+        const items = allItems
+          .filter(item => Number(chQty[item.id]) > 0)
+          .map(item => ({
+            ...(item.type === 'combo'
+              ? { combo_id: item.id, produto_id: null }
+              : { produto_id: item.id, combo_id: null }),
+            quantidade:  Number(chQty[item.id]),
+            preco_venda: item.salePrice,
+            custo:       item.ingredientCost,
+          }))
         if (items.length === 0) continue
 
         const { data: existing } = await supabase
-          .from('vendas_dia').select('id').eq('user_id', user.id).eq('data', date).eq('canal', ch).maybeSingle()
+          .from('vendas_dia').select('id')
+          .eq('user_id', user.id).eq('data', date).eq('canal', ch).maybeSingle()
 
         let dayId
         if (existing) {
@@ -375,11 +400,34 @@ export default function Sales({ enrichedProducts, totalExpenses }) {
     }
   }
 
-  // ── Render ──
+  // ── Card grid renderer ──
+  const renderGrid = (items, label) => {
+    if (items.length === 0) return null
+    return (
+      <div className="mb-6">
+        <h3 className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-3">{label}</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {items.map(item => (
+            <SaleCard
+              key={item.id} item={item}
+              qty={activeQty[item.id] || 0}
+              rawVal={rawVals[item.id]}
+              onRaw={(v) => setRawVals(rv => ({ ...rv, [item.id]: v }))}
+              onBlur={(v) => commitQty(item.id, v)}
+              onInc={() => handleInc(item.id)}
+              onDec={() => handleDec(item.id)}
+              disabled={isClosed}
+            />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   const bothClosed = directClosed && ifoodClosed
 
   return (
-    <div className="p-4 md:p-6 max-w-2xl mx-auto">
+    <div className="p-4 md:p-6 max-w-4xl mx-auto">
       {/* Page header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -387,18 +435,16 @@ export default function Sales({ enrichedProducts, totalExpenses }) {
           <p className="text-gray-400 text-sm mt-1">Registro diário de vendas</p>
         </div>
         <button
-          onClick={() => setShowSummary(true)}
-          disabled={bothClosed}
+          onClick={() => setShowSummary(true)} disabled={bothClosed}
           className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-800 disabled:text-gray-600 text-white px-4 py-2.5 rounded-xl font-medium text-sm transition-colors cursor-pointer disabled:cursor-not-allowed shadow-lg shadow-orange-500/20 disabled:shadow-none"
         >
-          <CheckCircle size={16} />
-          Fechar Dia
+          <CheckCircle size={16} />Fechar Dia
         </button>
       </div>
 
       {/* Date picker */}
       <div className="flex items-center gap-3 mb-5">
-        <div className="relative flex-1 max-w-xs">
+        <div className="relative max-w-xs w-full">
           <Calendar size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
           <input
             type="date" value={date} max={todayStr()}
@@ -421,8 +467,7 @@ export default function Sales({ enrichedProducts, totalExpenses }) {
                 channel === ch ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' : 'text-gray-500 hover:text-gray-300'
               }`}
             >
-              {label}
-              {closed && <Lock size={11} className="opacity-70" />}
+              {label}{closed && <Lock size={11} className="opacity-70" />}
             </button>
           )
         })}
@@ -430,12 +475,11 @@ export default function Sales({ enrichedProducts, totalExpenses }) {
 
       {/* iFood plan selector */}
       {channel === 'ifood' && !ifoodClosed && (
-        <div className="flex items-center gap-3 mb-4 p-3 bg-gray-900 border border-gray-800 rounded-xl">
+        <div className="flex items-center gap-3 mb-5 p-3 bg-gray-900 border border-gray-800 rounded-xl">
           <span className="text-gray-400 text-sm shrink-0">Plano:</span>
           <div className="relative flex-1">
             <select
-              value={ifoodPlan}
-              onChange={(e) => setIfoodPlan(e.target.value)}
+              value={ifoodPlan} onChange={(e) => setIfoodPlan(e.target.value)}
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-500 appearance-none cursor-pointer"
             >
               {Object.entries(IFOOD_PLANS).map(([key, { label }]) => (
@@ -444,55 +488,34 @@ export default function Sales({ enrichedProducts, totalExpenses }) {
             </select>
             <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
           </div>
-          <span className="text-orange-400 text-sm font-bold shrink-0">
-            −{(IFOOD_PLANS[ifoodPlan].rate * 100).toFixed(0)}%
-          </span>
+          <span className="text-orange-400 text-sm font-bold shrink-0">−{(IFOOD_PLANS[ifoodPlan].rate * 100).toFixed(0)}%</span>
         </div>
       )}
 
       {/* Closed indicator */}
       {isClosed && (
-        <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-2.5 mb-4">
+        <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-2.5 mb-5">
           <Lock size={14} className="text-green-400 shrink-0" />
           <p className="text-green-300 text-sm">Dia fechado — este registro está finalizado.</p>
         </div>
       )}
 
-      {/* Product list */}
-      <div className="bg-gray-900 rounded-xl border border-gray-800 mb-5">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
-          <span className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Produto</span>
-          <div className="flex items-center gap-10">
-            <span className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Qtd</span>
-            <span className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Total</span>
-          </div>
+      {/* Product & combo grids */}
+      {enrichedProducts.length === 0 && enrichedCombos.length === 0 ? (
+        <div className="bg-gray-900 rounded-xl p-14 text-center border border-gray-800 mb-6">
+          <ShoppingCart size={36} className="text-gray-700 mx-auto mb-3" />
+          <p className="text-gray-500 text-sm">Nenhum produto cadastrado.</p>
         </div>
-        <div className="px-4">
-          {enrichedProducts.length === 0 ? (
-            <div className="py-10 text-center">
-              <ShoppingCart size={32} className="text-gray-700 mx-auto mb-3" />
-              <p className="text-gray-500 text-sm">Nenhum produto cadastrado.</p>
-            </div>
-          ) : (
-            enrichedProducts.map(p => (
-              <ProductRow
-                key={p.id} product={p}
-                qty={activeQty[p.id] || 0}
-                rawVal={rawVals[p.id]}
-                onRaw={(v) => setRawVals(rv => ({ ...rv, [p.id]: v }))}
-                onBlur={(v) => commitQty(p.id, v)}
-                onInc={() => handleInc(p.id)}
-                onDec={() => handleDec(p.id)}
-                disabled={isClosed}
-              />
-            ))
-          )}
-        </div>
-      </div>
+      ) : (
+        <>
+          {renderGrid(enrichedProducts.map(p => ({ ...p, type: 'product' })), '🍔 Produtos')}
+          {renderGrid(enrichedCombos.map(c => ({ ...c, type: 'combo' })), '🍟 Combos')}
+        </>
+      )}
 
       {/* Running totals */}
       {currentSummary.totalItems > 0 && (
-        <div className="grid grid-cols-3 gap-3 mb-6">
+        <div className="grid grid-cols-3 gap-3 mb-8">
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 text-center">
             <p className="text-gray-500 text-xs mb-1">Itens</p>
             <p className="text-white font-bold text-xl">{currentSummary.totalItems}</p>
@@ -539,17 +562,17 @@ export default function Sales({ enrichedProducts, totalExpenses }) {
                   >
                     <div>
                       <p className="text-white font-medium text-sm">{fmtDate(day.date)}</p>
-                      <p className="text-gray-500 text-xs mt-0.5">{totItems} itens · {day.channels.direto ? '🟢 Direto' : ''}{day.channels.direto && day.channels.ifood ? ' + ' : ''}{day.channels.ifood ? '🟠 iFood' : ''}</p>
+                      <p className="text-gray-500 text-xs mt-0.5">
+                        {totItems} itens · {day.channels.direto ? '🟢 Direto' : ''}{day.channels.direto && day.channels.ifood ? ' + ' : ''}{day.channels.ifood ? '🟠 iFood' : ''}
+                      </p>
                     </div>
                     <div className="text-right">
                       <p className="text-orange-400 font-bold text-sm">{formatCurrency(totRevenue)}</p>
-                      <p className={`text-xs font-medium ${totProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        Lucro: {formatCurrency(totProfit)}
-                      </p>
+                      <p className={`text-xs font-medium ${totProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>Lucro: {formatCurrency(totProfit)}</p>
                     </div>
                   </button>
                   {isExpanded && (
-                    <div className="px-4 pb-4 pt-0 border-t border-gray-800 grid grid-cols-2 gap-4 text-xs">
+                    <div className="px-4 pb-4 border-t border-gray-800 grid grid-cols-2 gap-4 text-xs pt-4">
                       {dSum && (
                         <div className="space-y-1">
                           <p className="text-green-400 font-semibold mb-2">🟢 Direto</p>
@@ -580,7 +603,6 @@ export default function Sales({ enrichedProducts, totalExpenses }) {
         )}
       </div>
 
-      {/* Summary modal */}
       <SummaryModal
         isOpen={showSummary}
         onClose={() => setShowSummary(false)}

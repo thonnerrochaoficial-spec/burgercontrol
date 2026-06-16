@@ -441,6 +441,7 @@ function AppInner() {
         return (
           <Sales
             enrichedProducts={enrichedProducts}
+            enrichedCombos={enrichedCombos}
             totalExpenses={totalExpenses}
           />
         )
