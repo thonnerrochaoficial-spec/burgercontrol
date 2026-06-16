@@ -6,6 +6,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { formatCurrency } from '../utils'
+import IFoodImport from './IFoodImport'
 
 // ── Constants ──────────────────────────────────────────────────────────────
 const TAXA_TRANSACAO = 0.032   // taxa de pagamento online, sempre aplicada no iFood
@@ -658,6 +659,9 @@ export default function Sales({ enrichedProducts, enrichedCombos = [], totalExpe
           </div>
         </div>
       )}
+
+      {/* iFood xlsx import */}
+      {channel === 'ifood' && <IFoodImport />}
 
       {/* History */}
       <div>
